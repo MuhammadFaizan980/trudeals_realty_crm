@@ -13,17 +13,24 @@ class SettingsRepositoryImpl implements SettingsRepository {
   Future<NetworkResult<List<Stage>>> getStages() {
     return _client.get(
       path: '/api/stages',
-      decoder: (data) => (data as List).map((e) => Stage.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      decoder: (data) {
+        final json = Map<String, dynamic>.from(data as Map);
+        return (json['stages'] as List).map((e) => Stage.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+      },
     );
+  }
+
+  Stage _decodeStage(dynamic data) {
+    final json = Map<String, dynamic>.from(data as Map);
+    return Stage.fromJson(Map<String, dynamic>.from(json['stage'] as Map));
   }
 
   @override
   Future<NetworkResult<Stage>> saveStage(Stage stage) {
-    return _client.post(
-      path: '/api/stages',
-      data: stage.toJson(),
-      decoder: (data) => Stage.fromJson(Map<String, dynamic>.from(data as Map)),
-    );
+    if (stage.key.isEmpty) {
+      return _client.post(path: '/api/stages', data: stage.toCreateJson(), decoder: _decodeStage);
+    }
+    return _client.patch(path: '/api/stages/${stage.key}', data: stage.toUpdateJson(), decoder: _decodeStage);
   }
 
   @override
@@ -33,31 +40,45 @@ class SettingsRepositoryImpl implements SettingsRepository {
 
   @override
   Future<NetworkResult<void>> reorderStages(List<String> keys) {
-    return _client.post(path: '/api/stages/reorder', data: {'keys': keys});
+    return _client.patch(path: '/api/stages/reorder', data: {'order': keys});
   }
 
   @override
   Future<NetworkResult<List<User>>> getUsers() {
     return _client.get(
       path: '/api/users',
-      decoder: (data) => (data as List).map((e) => User.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      decoder: (data) {
+        final json = Map<String, dynamic>.from(data as Map);
+        return (json['users'] as List).map((e) => User.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+      },
     );
+  }
+
+  User _decodeUser(dynamic data) {
+    final json = Map<String, dynamic>.from(data as Map);
+    return User.fromJson(Map<String, dynamic>.from(json['user'] as Map));
   }
 
   @override
   Future<NetworkResult<User>> saveUser(User user) {
-    return _client.post(
-      path: '/api/users',
-      data: user.toJson(),
-      decoder: (data) => User.fromJson(Map<String, dynamic>.from(data as Map)),
-    );
+    if (user.id.isEmpty) {
+      return _client.post(path: '/api/users', data: user.toJson(), decoder: _decodeUser);
+    }
+    return _client.patch(path: '/api/users/${user.id}', data: user.toJson(), decoder: _decodeUser);
   }
 
   @override
   Future<NetworkResult<Map<String, List<dynamic>>>> getTemplates() {
     return _client.get(
       path: '/api/templates',
-      decoder: (data) => Map<String, List<dynamic>>.from(data as Map),
+      decoder: (data) {
+        final json = Map<String, dynamic>.from(data as Map);
+        final templates = (json['templates'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        return {
+          'email': templates.where((t) => t['channel'] == 'email').toList(),
+          'sms': templates.where((t) => t['channel'] == 'sms').toList(),
+        };
+      },
     );
   }
 }

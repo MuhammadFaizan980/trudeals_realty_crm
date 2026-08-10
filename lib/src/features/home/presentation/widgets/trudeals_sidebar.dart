@@ -1,8 +1,17 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:sizer/sizer.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:trudeals_realty_crm/src/core/di/injection.dart';
 import 'package:trudeals_realty_crm/src/core/theme/trudeals_colors.dart';
+import 'package:trudeals_realty_crm/src/features/contacts/presentation/cubits/pipeline_cubit.dart';
+import 'package:trudeals_realty_crm/src/features/settings/domain/repositories/admin_repository.dart';
 import '../../../auth/presentation/cubits/auth_cubit.dart';
 import '../../../auth/domain/entities/user.dart';
 
@@ -236,6 +245,11 @@ class _UserSwitcherState extends State<_UserSwitcher> {
     return BlocBuilder<AuthCubit, AuthState>(
       builder: (context, state) {
         if (state is! Authenticated) return const SizedBox.shrink();
+        // TruDealsSidebar is a normal descendant of HomePage's
+        // BlocProvider<PipelineCubit>, so context.watch is safe here (unlike
+        // the dialogs opened via Navigator.push/showDialog elsewhere).
+        final seats = context.watch<PipelineCubit>().state.users;
+
         return Container(
           margin: EdgeInsets.only(top: 18.px),
           padding: EdgeInsets.symmetric(horizontal: 10.px),
@@ -254,18 +268,21 @@ class _UserSwitcherState extends State<_UserSwitcher> {
               SizedBox(height: 5.px),
               PopupMenuButton<String>(
                 onSelected: (userId) async {
+                  final seat = seats.where((u) => u.id == userId).firstOrNull;
+                  if (seat?.email == null || seat!.email!.isEmpty) return;
                   final pass = await _showPasswordDialog(context);
-                  if (pass != null) {
-                    if (context.mounted) {
-                      // Login logic
-                    }
+                  if (pass == null || !context.mounted) return;
+
+                  final authCubit = context.read<AuthCubit>();
+                  final messenger = ScaffoldMessenger.of(context);
+                  final error = await authCubit.switchUser(seat.email!, pass);
+                  if (error != null) {
+                    messenger.showSnackBar(SnackBar(content: Text(error)));
                   }
                 },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(value: 'u-joe', child: Text('Joe Farmer')),
-                  const PopupMenuItem(value: 'u-sam', child: Text('Sam Rivera')),
-                  const PopupMenuItem(value: 'u-dana', child: Text('Dana Okafor')),
-                ],
+                itemBuilder: (context) => seats
+                    .map((u) => PopupMenuItem(value: u.id, enabled: u.email?.isNotEmpty == true, child: Text(u.name)))
+                    .toList(),
                 child: Container(
                   width: double.infinity,
                   padding: EdgeInsets.symmetric(vertical: 8.px, horizontal: 9.px),
@@ -325,44 +342,111 @@ class _UserSwitcherState extends State<_UserSwitcher> {
   }
 }
 
-class _SidebarFooter extends StatelessWidget {
+extension<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
+}
+
+class _SidebarFooter extends StatefulWidget {
   const _SidebarFooter();
 
   @override
+  State<_SidebarFooter> createState() => _SidebarFooterState();
+}
+
+class _SidebarFooterState extends State<_SidebarFooter> {
+  bool _busy = false;
+
+  Future<void> _export() async {
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await getIt<AdminRepository>().exportData();
+    if (!mounted) return;
+    setState(() => _busy = false);
+
+    result.fold(
+      ifLeft: (e) => messenger.showSnackBar(SnackBar(content: Text(e.message))),
+      ifRight: (data) async {
+        final dir = await getTemporaryDirectory();
+        final today = DateTime.now().toIso8601String().split('T').first;
+        final file = File('${dir.path}/trudeals-crm-backup-$today.json');
+        await file.writeAsString(const JsonEncoder.withIndent('  ').convert(data));
+        await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'TruDeals CRM backup — $today'));
+      },
+    );
+  }
+
+  Future<void> _import() async {
+    final picked = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['json']);
+    final path = picked?.files.single.path;
+    if (path == null || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    try {
+      final content = await File(path).readAsString();
+      final data = Map<String, dynamic>.from(jsonDecode(content) as Map);
+      final result = await getIt<AdminRepository>().importData(data);
+      if (!mounted) return;
+      result.fold(
+        ifLeft: (e) => messenger.showSnackBar(SnackBar(content: Text(e.message))),
+        ifRight: (summary) {
+          messenger.showSnackBar(const SnackBar(content: Text('Import complete')));
+          getIt<PipelineCubit>().refresh();
+        },
+      );
+    } catch (e) {
+      messenger.showSnackBar(const SnackBar(content: Text('That file isn\'t a valid backup')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        OutlinedButton(
-          onPressed: () {},
-          style: OutlinedButton.styleFrom(
-            side: BorderSide(color: Colors.white.withAlpha(46)),
-            foregroundColor: const Color(0xFFC9CDC8),
-            minimumSize: Size(double.infinity, 34.px),
-            textStyle: TextStyle(fontSize: 12.5.px, fontWeight: FontWeight.w500),
-          ),
-          child: const Text('Export data'),
-        ),
-        SizedBox(height: 8.px),
-        OutlinedButton(
-          onPressed: () {},
-          style: OutlinedButton.styleFrom(
-            side: BorderSide(color: Colors.white.withAlpha(46)),
-            foregroundColor: const Color(0xFFC9CDC8),
-            minimumSize: Size(double.infinity, 34.px),
-            textStyle: TextStyle(fontSize: 12.5.px, fontWeight: FontWeight.w500),
-          ),
-          child: const Text('Import data'),
-        ),
-        SizedBox(height: 12.px),
-        Text(
-          'Data saves in this app automatically.',
-          style: TextStyle(
-            fontSize: 11.px,
-            color: const Color(0xFF8A918A),
-            height: 1.45,
-          ),
-        ),
-      ],
+    return BlocBuilder<AuthCubit, AuthState>(
+      builder: (context, state) {
+        final isSuper = state is Authenticated && state.user.role == UserRole.superAdmin;
+        if (!isSuper) {
+          return Text(
+            'Data syncs with the server automatically.',
+            style: TextStyle(fontSize: 11.px, color: const Color(0xFF8A918A), height: 1.45),
+          );
+        }
+        return Column(
+          children: [
+            OutlinedButton(
+              onPressed: _busy ? null : _export,
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Colors.white.withAlpha(46)),
+                foregroundColor: const Color(0xFFC9CDC8),
+                minimumSize: Size(double.infinity, 34.px),
+                textStyle: TextStyle(fontSize: 12.5.px, fontWeight: FontWeight.w500),
+              ),
+              child: const Text('Export data'),
+            ),
+            SizedBox(height: 8.px),
+            OutlinedButton(
+              onPressed: _busy ? null : _import,
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Colors.white.withAlpha(46)),
+                foregroundColor: const Color(0xFFC9CDC8),
+                minimumSize: Size(double.infinity, 34.px),
+                textStyle: TextStyle(fontSize: 12.5.px, fontWeight: FontWeight.w500),
+              ),
+              child: const Text('Import data'),
+            ),
+            SizedBox(height: 12.px),
+            Text(
+              'Back up regularly — keep exports somewhere safe, they contain customer data.',
+              style: TextStyle(
+                fontSize: 11.px,
+                color: const Color(0xFF8A918A),
+                height: 1.45,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

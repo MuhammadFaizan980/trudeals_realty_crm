@@ -57,7 +57,7 @@ class AuthCubit extends Cubit<AuthState> {
     debugPrint('AuthCubit: checkAuth starting...');
     emit(AuthLoading());
     try {
-      final result = await _getCurrentUserUseCase().timeout(const Duration(seconds: 5));
+      final result = await _getCurrentUserUseCase();
       result.fold(
         ifLeft: (error) {
           debugPrint('AuthCubit: checkAuth left: ${error.message}');
@@ -78,7 +78,7 @@ class AuthCubit extends Cubit<AuthState> {
     debugPrint('AuthCubit: login starting for $email...');
     emit(AuthLoading());
     try {
-      final result = await _loginUseCase(email, password).timeout(const Duration(seconds: 10));
+      final result = await _loginUseCase(email, password);
       result.fold(
         ifLeft: (error) {
           debugPrint('AuthCubit: login left: ${error.message}');
@@ -98,5 +98,32 @@ class AuthCubit extends Cubit<AuthState> {
   Future<void> logout() async {
     await _logoutUseCase();
     emit(Unauthenticated());
+  }
+
+  /// Called when the network layer sees a 401 on a request that WAS
+  /// carrying a token — the session expired or was revoked server-side.
+  /// Unlike [logout], there's no point calling `/api/auth/logout` first
+  /// (the token that would authorize it is already invalid), so this just
+  /// drops straight to Unauthenticated so the root widget shows the login
+  /// screen instead of every open screen failing independently.
+  void forceLogout() {
+    if (state is Authenticated) {
+      emit(Unauthenticated());
+    }
+  }
+
+  /// Switches to a different seat mid-session (the sidebar's seat picker).
+  /// Unlike [login], a failure here does NOT emit [AuthError] — that would
+  /// blow away the whole app via the root state machine. Instead the caller
+  /// gets the error message back directly and the current session is left
+  /// untouched on failure.
+  Future<String?> switchUser(String email, String password) async {
+    final result = await _loginUseCase(email, password);
+    String? error;
+    result.fold(
+      ifLeft: (e) => error = e.message,
+      ifRight: (user) => emit(Authenticated(user)),
+    );
+    return error;
   }
 }

@@ -1,32 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import 'package:sizer/sizer.dart';
 
 import 'src/core/di/injection.dart';
-import 'src/core/network/mock_data.dart';
+import 'src/core/network/dio_network_client.dart';
+import 'src/core/network/network_client.dart';
+import 'src/core/network/token_storage.dart';
 import 'src/core/theme/trudeals_theme.dart';
 import 'src/features/auth/presentation/cubits/auth_cubit.dart';
 import 'src/features/home/presentation/pages/home_page.dart';
 import 'src/features/auth/presentation/pages/login_page.dart';
-import 'src/features/automations/logic/automation_engine.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   try {
-    debugPrint('Initializing Hive...');
-    await Hive.initFlutter();
-    
-    debugPrint('Initializing Mock Data...');
-    await MockData.init();
-    
     debugPrint('Initializing Dependencies...');
     await initializeDependencies();
-    
-    debugPrint('Starting Automation Engine...');
-    getIt<AutomationEngine>().start();
-    
+
+    // A 401 on a request that was carrying a token means the session
+    // expired or was revoked — force a clean logout instead of leaving
+    // every open screen to fail independently.
+    final client = getIt<NetworkClient>();
+    if (client is DioNetworkClient) {
+      client.onUnauthorized = () {
+        getIt<TokenStorage>().clear();
+        getIt<AuthCubit>().forceLogout();
+      };
+    }
+
     debugPrint('Initialization Complete. Running App.');
     runApp(const TruDealsApp());
   } catch (e, stack) {

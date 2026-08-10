@@ -27,20 +27,14 @@ class CalendarState {
           errorMessage == other.errorMessage;
 
   @override
-  int get hashCode =>
-      events.hashCode ^ selectedDate.hashCode ^ isLoading.hashCode ^ errorMessage.hashCode;
+  int get hashCode => events.hashCode ^ selectedDate.hashCode ^ isLoading.hashCode ^ errorMessage.hashCode;
 
-  CalendarState copyWith({
-    List<CallbackEvent>? events,
-    DateTime? selectedDate,
-    bool? isLoading,
-    String? errorMessage,
-  }) {
+  CalendarState copyWith({List<CallbackEvent>? events, DateTime? selectedDate, bool? isLoading, String? errorMessage}) {
     return CalendarState(
       events: events ?? this.events,
       selectedDate: selectedDate ?? this.selectedDate,
       isLoading: isLoading ?? this.isLoading,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage: errorMessage,
     );
   }
 }
@@ -52,7 +46,7 @@ class CalendarCubit extends Cubit<CalendarState> {
 
   Future<void> loadEvents(DateTime date) async {
     emit(state.copyWith(isLoading: true, errorMessage: null, selectedDate: date));
-    final result = await _repository.getTodaySchedule();
+    final result = await _repository.getSchedule(from: date, to: date);
     result.fold(
       ifLeft: (error) => emit(state.copyWith(isLoading: false, errorMessage: error.message)),
       ifRight: (events) => emit(state.copyWith(isLoading: false, events: events)),

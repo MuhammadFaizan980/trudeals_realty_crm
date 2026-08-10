@@ -5,12 +5,15 @@ import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:trudeals_realty_crm/src/core/di/injection.dart';
 import 'package:trudeals_realty_crm/src/core/theme/trudeals_colors.dart';
-import 'package:trudeals_realty_crm/src/features/dashboard/domain/entities/dashboard_stats.dart';
 import 'package:trudeals_realty_crm/src/features/calendar/domain/entities/callback_event.dart';
 import 'package:trudeals_realty_crm/src/features/dashboard/presentation/cubits/dashboard_cubit.dart';
 import 'package:trudeals_realty_crm/src/features/contacts/presentation/widgets/contact_drawer.dart';
+import 'package:trudeals_realty_crm/src/features/contacts/presentation/cubits/pipeline_cubit.dart';
 import 'package:trudeals_realty_crm/src/features/contacts/domain/entities/contact.dart';
-import 'package:trudeals_realty_crm/src/features/contacts/domain/usecases/get_contacts_usecase.dart';
+import 'package:trudeals_realty_crm/src/features/contacts/domain/entities/activity.dart';
+
+const _leadStages = ['new', 'contacted', 'appt'];
+const _listingStages = ['signed', 'active', 'contract'];
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -36,46 +39,76 @@ class _DashboardViewState extends State<_DashboardView> {
 
   @override
   Widget build(BuildContext context) {
+    final pipeline = context.watch<PipelineCubit>().state;
+    final contacts = pipeline.contacts.where((c) => !c.deleted).toList();
+
     return BlocBuilder<DashboardCubit, DashboardState>(
-      builder: (context, state) {
-        if (state.isLoading) {
+      builder: (context, dashState) {
+        if (pipeline.isLoading && contacts.isEmpty) {
           return const Center(child: CircularProgressIndicator());
         }
+        if (pipeline.errorMessage != null && contacts.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(pipeline.errorMessage!, style: TextStyle(color: TruDealsColors.inkSoft)),
+                SizedBox(height: 12.px),
+                OutlinedButton(onPressed: () => context.read<PipelineCubit>().refresh(), child: const Text('Retry')),
+              ],
+            ),
+          );
+        }
+
+        final followUps = contacts.where((c) => c.followUp != null && c.stage != 'closed').toList()
+          ..sort((a, b) => a.followUp!.compareTo(b.followUp!));
+        final recent = contacts
+            .expand((c) => c.activities.map((a) => (contact: c, activity: a)))
+            .toList()
+          ..sort((a, b) => b.activity.timestamp.compareTo(a.activity.timestamp));
 
         return RefreshIndicator(
-          onRefresh: () => context.read<DashboardCubit>().loadDashboard(),
+          onRefresh: () => Future.wait([
+            context.read<PipelineCubit>().refresh(),
+            context.read<DashboardCubit>().loadDashboard(),
+          ]),
           child: ListView(
             padding: EdgeInsets.symmetric(horizontal: 34.px, vertical: 20.px),
             children: [
-              if (state.stats != null)
-                _StatsRow(
-                  stats: state.stats!,
-                  expandedSegment: _expandedSegment,
-                  onSegmentTap: (seg) => setState(() => _expandedSegment = _expandedSegment == seg ? null : seg),
-                ),
+              _StatsRow(
+                contacts: contacts,
+                expandedSegment: _expandedSegment,
+                onSegmentTap: (seg) => setState(() => _expandedSegment = _expandedSegment == seg ? null : seg),
+              ),
               if (_expandedSegment != null) ...[
                 SizedBox(height: 24.px),
                 _ExpandedSegmentPanel(
                   segment: _expandedSegment!,
+                  contacts: contacts,
+                  userName: pipeline.userName,
                   onCollapse: () => setState(() => _expandedSegment = null),
                 ),
               ],
               SizedBox(height: 24.px),
               _DashboardPanel(
                 title: "Today's schedule",
-                child: state.schedule.isEmpty
+                child: dashState.todaySchedule.isEmpty
                     ? const _EmptyState(message: 'Nothing scheduled today.')
+                    : Column(children: dashState.todaySchedule.map((e) => _ScheduleTile(event: e)).toList()),
+              ),
+              _DashboardPanel(
+                title: 'Upcoming follow-ups',
+                child: followUps.isEmpty
+                    ? const _EmptyState(message: 'No follow-ups scheduled.')
+                    : Column(children: followUps.take(7).map((c) => _FollowUpTile(contact: c)).toList()),
+              ),
+              _DashboardPanel(
+                title: 'Recent activity',
+                child: recent.isEmpty
+                    ? const _EmptyState(message: 'No recent activity.')
                     : Column(
-                        children: state.schedule.map((e) => _ScheduleTile(event: e)).toList(),
+                        children: recent.take(6).map((r) => _ActivityTile(contact: r.contact, activity: r.activity)).toList(),
                       ),
-              ),
-              const _DashboardPanel(
-                title: "Upcoming follow-ups",
-                child: _EmptyState(message: 'No follow-ups scheduled.'),
-              ),
-              const _DashboardPanel(
-                title: "Recent activity",
-                child: _EmptyState(message: 'No recent activity.'),
               ),
             ],
           ),
@@ -86,18 +119,20 @@ class _DashboardViewState extends State<_DashboardView> {
 }
 
 class _StatsRow extends StatelessWidget {
-  final DashboardStats stats;
+  final List<Contact> contacts;
   final String? expandedSegment;
   final Function(String) onSegmentTap;
 
-  const _StatsRow({
-    required this.stats,
-    this.expandedSegment,
-    required this.onSegmentTap,
-  });
+  const _StatsRow({required this.contacts, this.expandedSegment, required this.onSegmentTap});
 
   @override
   Widget build(BuildContext context) {
+    final activeLeads = contacts.where((c) => _leadStages.contains(c.stage)).length;
+    final listingsInPlay = contacts.where((c) => _listingStages.contains(c.stage)).length;
+    final inSupport = contacts.where((c) => c.stage == 'support').length;
+    final openPipeline = contacts.where((c) => c.stage != 'closed');
+    final pipelineValue = openPipeline.fold(0.0, (sum, c) => sum + c.dealValue);
+
     return LayoutBuilder(builder: (context, constraints) {
       final crossAxisCount = constraints.maxWidth > 900 ? 4 : 2;
       return GridView.count(
@@ -106,31 +141,32 @@ class _StatsRow extends StatelessWidget {
         mainAxisSpacing: 14.px,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
+        childAspectRatio: 1.5,
         children: [
           _StatCard(
             label: 'Active leads',
-            value: stats.totalLeads.toString(),
+            value: activeLeads.toString(),
             hint: 'New through appointment',
             isExpanded: expandedSegment == 'leads',
             onTap: () => onSegmentTap('leads'),
           ),
           _StatCard(
             label: 'Listings in play',
-            value: stats.activeDeals.toString(),
+            value: listingsInPlay.toString(),
             hint: 'Signed through under contract',
             isExpanded: expandedSegment == 'listings',
             onTap: () => onSegmentTap('listings'),
           ),
           _StatCard(
             label: 'In support',
-            value: '0',
-            hint: 'New Sales Customer Support',
+            value: inSupport.toString(),
+            hint: 'Customer support',
             isExpanded: expandedSegment == 'support',
             onTap: () => onSegmentTap('support'),
           ),
           _StatCard(
             label: 'Pipeline value',
-            value: '\$${(stats.pipelineValue / 1000).toStringAsFixed(0)}k',
+            value: '\$${(pipelineValue / 1000).toStringAsFixed(0)}k',
             hint: 'Open deals',
             isExpanded: expandedSegment == 'pipeline',
             onTap: () => onSegmentTap('pipeline'),
@@ -160,15 +196,13 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(10.px),
       child: Container(
-        padding: EdgeInsets.all(18.px),
+        padding: EdgeInsets.all(16.px),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(10.px),
-          border: Border.all(
-            color: isExpanded ? TruDealsColors.sageDeep : TruDealsColors.line,
-            width: isExpanded ? 2 : 1,
-          ),
+          border: Border.all(color: isExpanded ? TruDealsColors.sageDeep : TruDealsColors.line, width: isExpanded ? 2 : 1),
           boxShadow: [
             BoxShadow(color: Colors.black.withAlpha(13), offset: const Offset(0, 1), blurRadius: 2),
             BoxShadow(color: Colors.black.withAlpha(15), offset: const Offset(0, 4), blurRadius: 14),
@@ -176,15 +210,18 @@ class _StatCard extends StatelessWidget {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
               label.toUpperCase(),
-              style: TextStyle(fontSize: 11.5.px, letterSpacing: 0.1, fontWeight: FontWeight.w600, color: TruDealsColors.inkSoft),
+              style: TextStyle(fontSize: 11.px, letterSpacing: 0.1, fontWeight: FontWeight.w600, color: TruDealsColors.inkSoft),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            SizedBox(height: 8.px),
-            Text(value, style: GoogleFonts.dmSerifDisplay(fontSize: 30.px, height: 1.1)),
             SizedBox(height: 6.px),
-            Text(hint, style: TextStyle(fontSize: 12.px, color: TruDealsColors.inkSoft)),
+            Text(value, style: GoogleFonts.dmSerifDisplay(fontSize: 26.px, height: 1.1), maxLines: 1, overflow: TextOverflow.ellipsis),
+            SizedBox(height: 4.px),
+            Text(hint, style: TextStyle(fontSize: 11.px, color: TruDealsColors.inkSoft), maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),
@@ -247,14 +284,7 @@ class _ScheduleTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (context) => ContactDrawer(contactId: event.contactId),
-        );
-      },
+      onTap: () => showContactDrawer(context, event.contactId),
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: 20.px, vertical: 11.px),
         child: Row(
@@ -269,12 +299,11 @@ class _ScheduleTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(event.contactName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  Text(event.note ?? 'Call back', style: TextStyle(fontSize: 12.5.px, color: TruDealsColors.inkSoft)),
+                  Text(event.contactName, style: const TextStyle(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(event.note ?? 'Call back', style: TextStyle(fontSize: 12.5.px, color: TruDealsColors.inkSoft), maxLines: 1, overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
-            Text('Call back', style: TextStyle(fontSize: 12.px, color: TruDealsColors.inkSoft)),
           ],
         ),
       ),
@@ -282,102 +311,151 @@ class _ScheduleTile extends StatelessWidget {
   }
 }
 
-class _ExpandedSegmentPanel extends StatefulWidget {
-  final String segment;
-  final VoidCallback onCollapse;
-  const _ExpandedSegmentPanel({required this.segment, required this.onCollapse});
-
-  @override
-  State<_ExpandedSegmentPanel> createState() => _ExpandedSegmentPanelState();
-}
-
-class _ExpandedSegmentPanelState extends State<_ExpandedSegmentPanel> {
-  List<Contact> _contacts = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final result = await getIt<GetContactsUseCase>().call();
-    result.fold(
-      ifLeft: (e) => setState(() => _isLoading = false),
-      ifRight: (list) {
-        final filtered = switch (widget.segment) {
-          'leads' => list.where((c) => ['new', 'contacted', 'appt'].contains(c.stage)).toList(),
-          'listings' => list.where((c) => ['signed', 'active', 'contract'].contains(c.stage)).toList(),
-          'support' => list.where((c) => c.stage == 'support').toList(),
-          _ => list,
-        };
-        setState(() {
-          _contacts = filtered;
-          _isLoading = false;
-        });
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final title = switch (widget.segment) {
-      'leads' => 'Active leads',
-      'listings' => 'Listings in play',
-      'support' => 'In support',
-      'pipeline' => 'Open pipeline',
-      _ => '',
-    };
-
-    return _DashboardPanel(
-      title: '$title · ${_contacts.length}',
-      child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                ..._contacts.map((c) => _SegmentItem(contact: c)),
-                Padding(
-                  padding: EdgeInsets.all(12.px),
-                  child: TextButton(onPressed: widget.onCollapse, child: const Text('Collapse')),
-                )
-              ],
-            ),
-    );
-  }
-}
-
-class _SegmentItem extends StatelessWidget {
+class _FollowUpTile extends StatelessWidget {
   final Contact contact;
-  const _SegmentItem({required this.contact});
+  const _FollowUpTile({required this.contact});
 
   @override
   Widget build(BuildContext context) {
+    final overdue = contact.followUp!.isBefore(DateTime.now());
     return InkWell(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (context) => ContactDrawer(contactId: contact.id),
-        );
-      },
+      onTap: () => showContactDrawer(context, contact.id),
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: 20.px, vertical: 11.px),
         child: Row(
           children: [
-             Container(
+            Container(
               padding: EdgeInsets.symmetric(horizontal: 9.px, vertical: 4.px),
-              decoration: BoxDecoration(color: TruDealsColors.sageMist, borderRadius: BorderRadius.circular(6.px)),
-              child: Text(contact.stage.toUpperCase(), style: TextStyle(fontFamily: 'DM Mono', fontSize: 12.5.px, color: TruDealsColors.sageDeep)),
+              decoration: BoxDecoration(color: overdue ? TruDealsColors.redBg : TruDealsColors.sageMist, borderRadius: BorderRadius.circular(6.px)),
+              child: Text(
+                (overdue ? 'Overdue · ' : '') + DateFormat('MMM d').format(contact.followUp!),
+                style: TextStyle(fontFamily: 'DM Mono', fontSize: 12.px, color: overdue ? TruDealsColors.red : TruDealsColors.sageDeep),
+              ),
             ),
             SizedBox(width: 14.px),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(contact.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  Text('${contact.propertyAddress ?? ""} · ${contact.assignedTo}', style: TextStyle(fontSize: 12.5.px, color: TruDealsColors.inkSoft)),
+                  Text(contact.name, style: const TextStyle(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(contact.propertyAddress ?? '', style: TextStyle(fontSize: 12.5.px, color: TruDealsColors.inkSoft), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivityTile extends StatelessWidget {
+  final Contact contact;
+  final Activity activity;
+  const _ActivityTile({required this.contact, required this.activity});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => showContactDrawer(context, contact.id),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20.px, vertical: 11.px),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 9.px, vertical: 4.px),
+              decoration: BoxDecoration(color: const Color(0xFFEFEEE8), borderRadius: BorderRadius.circular(6.px)),
+              child: Text(DateFormat('MMM d').format(activity.timestamp), style: TextStyle(fontFamily: 'DM Mono', fontSize: 12.px, color: TruDealsColors.inkSoft)),
+            ),
+            SizedBox(width: 14.px),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(contact.name, style: const TextStyle(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text('${activity.type} — ${activity.text}', style: TextStyle(fontSize: 12.5.px, color: TruDealsColors.inkSoft), maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ExpandedSegmentPanel extends StatelessWidget {
+  final String segment;
+  final List<Contact> contacts;
+  final String Function(String?) userName;
+  final VoidCallback onCollapse;
+  const _ExpandedSegmentPanel({required this.segment, required this.contacts, required this.userName, required this.onCollapse});
+
+  @override
+  Widget build(BuildContext context) {
+    final title = switch (segment) {
+      'leads' => 'Active leads',
+      'listings' => 'Listings in play',
+      'support' => 'In support',
+      'pipeline' => 'Open pipeline',
+      _ => '',
+    };
+    final filtered = switch (segment) {
+      'leads' => contacts.where((c) => _leadStages.contains(c.stage)).toList(),
+      'listings' => contacts.where((c) => _listingStages.contains(c.stage)).toList(),
+      'support' => contacts.where((c) => c.stage == 'support').toList(),
+      'pipeline' => contacts.where((c) => c.stage != 'closed').toList(),
+      _ => <Contact>[],
+    }..sort((a, b) => (b.dealValue).compareTo(a.dealValue));
+
+    return _DashboardPanel(
+      title: '$title · ${filtered.length}',
+      child: Column(
+        children: [
+          if (filtered.isEmpty)
+            const _EmptyState(message: 'No profiles in this group right now.')
+          else
+            ...filtered.map((c) => _SegmentItem(contact: c, ownerName: userName(c.assignedTo))),
+          Padding(
+            padding: EdgeInsets.all(12.px),
+            child: TextButton(onPressed: onCollapse, child: const Text('Collapse')),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SegmentItem extends StatelessWidget {
+  final Contact contact;
+  final String ownerName;
+  const _SegmentItem({required this.contact, required this.ownerName});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => showContactDrawer(context, contact.id),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20.px, vertical: 11.px),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 9.px, vertical: 4.px),
+              decoration: BoxDecoration(color: TruDealsColors.sageMist, borderRadius: BorderRadius.circular(6.px)),
+              child: Text(contact.stage.toUpperCase(), style: TextStyle(fontFamily: 'DM Mono', fontSize: 12.px, color: TruDealsColors.sageDeep)),
+            ),
+            SizedBox(width: 14.px),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(contact.name, style: const TextStyle(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(
+                    '${contact.propertyAddress?.isNotEmpty == true ? contact.propertyAddress! : ""} · $ownerName',
+                    style: TextStyle(fontSize: 12.5.px, color: TruDealsColors.inkSoft),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),

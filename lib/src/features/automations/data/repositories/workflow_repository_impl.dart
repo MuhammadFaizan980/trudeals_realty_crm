@@ -1,6 +1,10 @@
+import 'package:dart_either/dart_either.dart';
+
 import 'package:trudeals_realty_crm/src/core/network/network_client.dart';
+import 'package:trudeals_realty_crm/src/core/network/network_exception.dart';
 import 'package:trudeals_realty_crm/src/core/network/network_typedefs.dart';
 import 'package:trudeals_realty_crm/src/features/automations/domain/entities/workflow.dart';
+import 'package:trudeals_realty_crm/src/features/automations/domain/entities/enrollment_summary.dart';
 import 'package:trudeals_realty_crm/src/features/automations/domain/repositories/workflow_repository.dart';
 
 class WorkflowRepositoryImpl implements WorkflowRepository {
@@ -8,20 +12,34 @@ class WorkflowRepositoryImpl implements WorkflowRepository {
 
   WorkflowRepositoryImpl(this._client);
 
+  Workflow _decodeWorkflow(dynamic data, {String key = 'workflow'}) {
+    final json = Map<String, dynamic>.from(data as Map);
+    return Workflow.fromJson(Map<String, dynamic>.from(json[key] as Map));
+  }
+
   @override
   Future<NetworkResult<List<Workflow>>> getWorkflows() {
     return _client.get(
       path: '/api/workflows',
-      decoder: (data) => (data as List).map((e) => _parseWorkflow(e)).toList(),
+      decoder: (data) {
+        final json = Map<String, dynamic>.from(data as Map);
+        return (json['workflows'] as List).map((e) => Workflow.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+      },
     );
   }
 
   @override
-  Future<NetworkResult<Workflow>> getWorkflow(String id) {
-    return _client.get(
-      path: '/api/workflows/$id',
-      decoder: (data) => _parseWorkflow(data),
-    );
+  Future<NetworkResult<Workflow>> getWorkflow(String id) async {
+    // No single-workflow GET endpoint exists — list + find.
+    final result = await getWorkflows();
+    List<Workflow>? workflows;
+    NetworkException? error;
+    result.fold(ifLeft: (e) => error = e, ifRight: (w) => workflows = w);
+    if (error != null) return Left(error!);
+
+    final match = workflows!.where((w) => w.id == id).cast<Workflow?>().firstWhere((w) => w != null, orElse: () => null);
+    if (match == null) return Left(const BadRequestException(message: 'Workflow not found'));
+    return Right(match);
   }
 
   @override
@@ -29,52 +47,46 @@ class WorkflowRepositoryImpl implements WorkflowRepository {
     return _client.patch(
       path: '/api/workflows/$id',
       data: {'active': active},
-      decoder: (data) => _parseWorkflow(data),
+      decoder: (data) => _decodeWorkflow(data),
     );
   }
 
-  Workflow _parseWorkflow(dynamic data) {
-    final json = Map<String, dynamic>.from(data as Map);
-    final trigger = json['trigger'] != null ? Map<String, dynamic>.from(json['trigger'] as Map) : null;
-    
-    return Workflow(
-      id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? 'Untitled Workflow',
-      isActive: json['active'] as bool? ?? json['isActive'] as bool? ?? true,
-      triggerType: _parseTriggerType(trigger?['type']?.toString() ?? 'tag'),
-      triggerValue: trigger?['value']?.toString(),
-      steps: (json['steps'] as List?)?.map((s) => _parseStep(s)).toList() ?? [],
+  @override
+  Future<NetworkResult<Workflow>> createWorkflow(Workflow workflow) {
+    return _client.post(path: '/api/workflows', data: workflow.toJson(), decoder: (data) => _decodeWorkflow(data));
+  }
+
+  @override
+  Future<NetworkResult<Workflow>> updateWorkflow(Workflow workflow) {
+    return _client.patch(path: '/api/workflows/${workflow.id}', data: workflow.toJson(), decoder: (data) => _decodeWorkflow(data));
+  }
+
+  @override
+  Future<NetworkResult<void>> deleteWorkflow(String id) {
+    return _client.delete(path: '/api/workflows/$id');
+  }
+
+  @override
+  Future<NetworkResult<List<EnrollmentSummary>>> getActiveEnrollments() {
+    return _client.get(
+      path: '/api/enrollments',
+      queryParameters: {'active': '1'},
+      decoder: (data) {
+        final json = Map<String, dynamic>.from(data as Map);
+        return (json['enrollments'] as List)
+            .map((e) => EnrollmentSummary.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      },
     );
   }
 
-  WorkflowStep _parseStep(dynamic data) {
-    final json = Map<String, dynamic>.from(data as Map);
-    return WorkflowStep(
-      id: json['id']?.toString() ?? '',
-      workflowId: json['workflow_id']?.toString() ?? '',
-      stepOrder: json['step_order'] as int? ?? 0,
-      type: _parseStepType(json['type']?.toString() ?? 'email'),
-      templateId: json['tpl']?.toString() ?? json['template_id']?.toString(),
-      waitAmount: json['amount'] as int? ?? json['wait_amount'] as int?,
-      waitUnit: json['unit']?.toString() ?? json['wait_unit']?.toString(),
-      tagValue: json['value']?.toString() ?? json['tag_value']?.toString(),
-      notifyTo: json['value']?.toString() ?? json['notify_to']?.toString(),
-      notifyText: json['text']?.toString() ?? json['notify_text']?.toString(),
-    );
+  @override
+  Future<NetworkResult<void>> stopEnrollment(String enrollmentId) {
+    return _client.post(path: '/api/enrollments/$enrollmentId/stop');
   }
 
-  TriggerType _parseTriggerType(String type) {
-    return TriggerType.values.firstWhere((e) => e.name == type, orElse: () => TriggerType.tag);
-  }
-
-  StepType _parseStepType(String type) {
-    final mappedType = switch(type) {
-      'add_tag' => 'addTag',
-      'remove_tag' => 'removeTag',
-      'if' => 'ifCond',
-      'stop_all' => 'stopAll',
-      _ => type,
-    };
-    return StepType.values.firstWhere((e) => e.name == mappedType, orElse: () => StepType.email);
+  @override
+  Future<NetworkResult<void>> runEnrollmentNext(String enrollmentId) {
+    return _client.post(path: '/api/enrollments/$enrollmentId/run-next');
   }
 }

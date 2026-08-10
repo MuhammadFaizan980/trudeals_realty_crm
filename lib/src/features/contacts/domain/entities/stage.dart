@@ -28,19 +28,16 @@ class Stage {
 
   factory Stage.fromJson(Map<String, dynamic> json) {
     return Stage(
-      key: json['key'] as String,
+      key: (json['_id'] ?? json['key']).toString(),
       label: json['label'] as String,
-      roles: List<String>.from(json['roles'] as List),
-      sortOrder: json['sort_order'] as int? ?? 0,
+      roles: List<String>.from(json['roles'] as List? ?? const []),
+      sortOrder: json['sortOrder'] as int? ?? 0,
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'key': key,
-      'label': label,
-      'roles': roles,
-      'sort_order': sortOrder,
-    };
-  }
+  /// Body for `POST /api/stages` (creates a new stage; the server assigns the key).
+  Map<String, dynamic> toCreateJson() => {'label': label, 'roles': roles};
+
+  /// Body for `PATCH /api/stages/:key`.
+  Map<String, dynamic> toUpdateJson() => {'label': label, 'roles': roles, 'sortOrder': sortOrder};
 }

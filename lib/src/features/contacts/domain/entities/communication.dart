@@ -9,6 +9,8 @@ class Communication {
   final String body;
   final bool isAutomated;
   final String? by;
+  final String? twilioSid;
+  final String? emailMsgId;
 
   const Communication({
     required this.timestamp,
@@ -18,6 +20,8 @@ class Communication {
     required this.body,
     this.isAutomated = false,
     this.by,
+    this.twilioSid,
+    this.emailMsgId,
   });
 
   @override
@@ -52,6 +56,8 @@ class Communication {
       body: json['body'] as String,
       isAutomated: json['automated'] as bool? ?? false,
       by: json['by'] as String?,
+      twilioSid: json['twilioSid'] as String?,
+      emailMsgId: json['emailMsgId'] as String?,
     );
   }
 
@@ -64,6 +70,8 @@ class Communication {
       'body': body,
       'automated': isAutomated,
       'by': by,
+      'twilioSid': twilioSid,
+      'emailMsgId': emailMsgId,
     };
   }
 }

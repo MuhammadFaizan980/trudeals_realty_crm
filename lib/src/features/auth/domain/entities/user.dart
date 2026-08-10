@@ -20,8 +20,8 @@ class User {
   final String? email;
   final String? emailSig;
   final String? smsSig;
-  final String password;
   final bool isActive;
+  final DateTime? createdAt;
 
   const User({
     required this.id,
@@ -32,8 +32,8 @@ class User {
     this.email,
     this.emailSig,
     this.smsSig,
-    required this.password,
     this.isActive = true,
+    this.createdAt,
   });
 
   @override
@@ -49,7 +49,6 @@ class User {
           email == other.email &&
           emailSig == other.emailSig &&
           smsSig == other.smsSig &&
-          password == other.password &&
           isActive == other.isActive;
 
   @override
@@ -62,27 +61,25 @@ class User {
       email.hashCode ^
       emailSig.hashCode ^
       smsSig.hashCode ^
-      password.hashCode ^
       isActive.hashCode;
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'] as String,
+      id: (json['id'] ?? json['_id']).toString(),
       name: json['name'] as String,
       role: UserRole.fromKey(json['role'] as String),
-      dept: json['dept'] as String,
+      dept: json['dept'] as String? ?? '',
       phone: json['phone'] as String?,
       email: json['email'] as String?,
       emailSig: json['emailSig'] as String?,
       smsSig: json['smsSig'] as String?,
-      password: json['password'] as String? ?? 'demo',
       isActive: json['isActive'] as bool? ?? true,
+      createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'].toString()) : null,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
       'name': name,
       'role': role.key,
       'dept': dept,
@@ -90,7 +87,6 @@ class User {
       'email': email,
       'emailSig': emailSig,
       'smsSig': smsSig,
-      'password': password,
       'isActive': isActive,
     };
   }

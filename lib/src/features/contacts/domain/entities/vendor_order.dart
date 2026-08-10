@@ -28,8 +28,8 @@ class VendorOrder {
   factory VendorOrder.fromJson(Map<String, dynamic> json) {
     return VendorOrder(
       company: json['company'] as String?,
-      orderedAt: DateTime.parse(json['ordered_at'] as String),
-      eta: json['eta'] != null && json['eta'] != '' ? DateTime.parse(json['eta'] as String) : null,
+      orderedAt: DateTime.parse(json['orderedAt'] as String),
+      eta: json['etaAt'] != null && json['etaAt'] != '' ? DateTime.parse(json['etaAt'] as String) : null,
       notes: json['notes'] as String?,
     );
   }
@@ -37,8 +37,8 @@ class VendorOrder {
   Map<String, dynamic> toJson() {
     return {
       'company': company,
-      'ordered_at': orderedAt.toIso8601String(),
-      'eta': eta?.toIso8601String(),
+      'orderedAt': orderedAt.toIso8601String(),
+      'etaAt': eta?.toIso8601String(),
       'notes': notes,
     };
   }

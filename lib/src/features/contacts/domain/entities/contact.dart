@@ -1,5 +1,11 @@
 import 'package:flutter/foundation.dart';
 
+import 'activity.dart';
+import 'callback.dart';
+import 'communication.dart';
+import 'enrollment.dart';
+import 'vendor_order.dart';
+
 enum Priority { high, med, low }
 enum LeadType { seller, buyer, cma }
 
@@ -17,10 +23,21 @@ class Contact {
   final Priority priority;
   final String? assignedTo;
   final DateTime? followUp;
+  final DateTime? linkClickedAt;
+  final DateTime? lastInboundAt;
   final DateTime createdAt;
   final List<String> tags;
   final bool deleted;
   final DateTime? deletedAt;
+  final String? deletedBy;
+
+  /// Embedded on the profile document itself — the real API returns these
+  /// inline rather than through separate sub-resource fetches.
+  final List<Activity> activities;
+  final List<Communication> comms;
+  final List<Callback> callbacks;
+  final List<Enrollment> enrollments;
+  final Map<String, VendorOrder> orders;
 
   const Contact({
     required this.id,
@@ -36,10 +53,18 @@ class Contact {
     this.priority = Priority.med,
     this.assignedTo,
     this.followUp,
+    this.linkClickedAt,
+    this.lastInboundAt,
     required this.createdAt,
     this.tags = const [],
     this.deleted = false,
     this.deletedAt,
+    this.deletedBy,
+    this.activities = const [],
+    this.comms = const [],
+    this.callbacks = const [],
+    this.enrollments = const [],
+    this.orders = const {},
   });
 
   @override
@@ -63,7 +88,11 @@ class Contact {
           createdAt == other.createdAt &&
           listEquals(tags, other.tags) &&
           deleted == other.deleted &&
-          deletedAt == other.deletedAt;
+          deletedAt == other.deletedAt &&
+          listEquals(activities, other.activities) &&
+          listEquals(comms, other.comms) &&
+          listEquals(callbacks, other.callbacks) &&
+          listEquals(enrollments, other.enrollments);
 
   @override
   int get hashCode =>
@@ -86,24 +115,52 @@ class Contact {
       deletedAt.hashCode;
 
   factory Contact.fromJson(Map<String, dynamic> json) {
+    final ordersJson = json['orders'] is Map ? Map<String, dynamic>.from(json['orders'] as Map) : const <String, dynamic>{};
+    final orders = <String, VendorOrder>{};
+    ordersJson.forEach((kind, value) {
+      if (value is Map) orders[kind] = VendorOrder.fromJson(Map<String, dynamic>.from(value));
+    });
+
     return Contact(
-      id: json['id']?.toString() ?? '',
+      id: (json['id'] ?? json['_id'])?.toString() ?? '',
       name: json['name']?.toString() ?? 'Unnamed',
       phone: json['phone']?.toString(),
       email: json['email']?.toString(),
-      propertyAddress: (json['property_address'] ?? json['propertyAddress'])?.toString(),
+      propertyAddress: json['propertyAddress']?.toString(),
       source: json['source']?.toString(),
-      leadType: json['leadType'] != null ? LeadType.values.firstWhere((e) => e.name == json['leadType'], orElse: () => LeadType.seller) : null,
+      leadType: json['leadType'] != null
+          ? LeadType.values.firstWhere((e) => e.name == json['leadType'], orElse: () => LeadType.seller)
+          : null,
       plan: json['plan']?.toString() ?? 'undecided',
       stage: json['stage']?.toString() ?? 'new',
       dealValue: (json['dealValue'] as num?)?.toDouble() ?? 0.0,
       priority: Priority.values.firstWhere((e) => e.name == (json['priority'] ?? 'med'), orElse: () => Priority.med),
       assignedTo: json['assignedTo']?.toString(),
       followUp: json['followUp'] != null ? DateTime.tryParse(json['followUp'].toString()) : null,
+      linkClickedAt: json['linkClickedAt'] != null ? DateTime.tryParse(json['linkClickedAt'].toString()) : null,
+      lastInboundAt: json['lastInboundAt'] != null ? DateTime.tryParse(json['lastInboundAt'].toString()) : null,
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
-      tags: List<String>.from(json['tags'] ?? []),
+      tags: List<String>.from(json['tags'] ?? const []),
       deleted: json['deleted'] as bool? ?? false,
       deletedAt: json['deletedAt'] != null ? DateTime.tryParse(json['deletedAt'].toString()) : null,
+      deletedBy: json['deletedBy']?.toString(),
+      activities: (json['activities'] as List?)
+              ?.map((e) => Activity.fromJson(Map<String, dynamic>.from(e as Map)))
+              .toList() ??
+          const [],
+      comms: (json['comms'] as List?)
+              ?.map((e) => Communication.fromJson(Map<String, dynamic>.from(e as Map)))
+              .toList() ??
+          const [],
+      callbacks: (json['callbacks'] as List?)
+              ?.map((e) => Callback.fromJson(Map<String, dynamic>.from(e as Map)))
+              .toList() ??
+          const [],
+      enrollments: (json['enrollments'] as List?)
+              ?.map((e) => Enrollment.fromJson(Map<String, dynamic>.from(e as Map)))
+              .toList() ??
+          const [],
+      orders: orders,
     );
   }
 
@@ -113,7 +170,7 @@ class Contact {
       'name': name,
       'phone': phone,
       'email': email,
-      'property_address': propertyAddress,
+      'propertyAddress': propertyAddress,
       'source': source,
       'leadType': leadType?.name,
       'plan': plan,
