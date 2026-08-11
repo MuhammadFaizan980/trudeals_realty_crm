@@ -127,9 +127,9 @@ class _HomePageState extends State<HomePage> {
                   }
                 },
                 items: const [
-                  BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dash'),
-                  BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Cal'),
-                  BottomNavigationBarItem(icon: Icon(Icons.view_kanban), label: 'Pipe'),
+                  BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
+                  BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: 'Calendar'),
+                  BottomNavigationBarItem(icon: Icon(Icons.view_kanban), label: 'Pipeline'),
                   BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Leads'),
                   BottomNavigationBarItem(icon: Icon(Icons.menu), label: 'More'),
                 ],

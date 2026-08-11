@@ -423,7 +423,7 @@ class _UserRow extends StatelessWidget {
           Container(
             padding: EdgeInsets.symmetric(horizontal: 8.px, vertical: 3.px),
             decoration: BoxDecoration(color: TruDealsColors.sageMist, borderRadius: BorderRadius.circular(99.px)),
-            child: Text(user.role.name.toUpperCase(), style: TextStyle(fontSize: 10.5.px, fontWeight: FontWeight.w700, color: TruDealsColors.sageDeep)),
+            child: Text(user.role.label.toUpperCase(), style: TextStyle(fontSize: 10.5.px, fontWeight: FontWeight.w700, color: TruDealsColors.sageDeep)),
           ),
           SizedBox(width: 10.px),
           TextButton(onPressed: onManage, child: const Text('Manage seat', style: TextStyle(color: TruDealsColors.sageDeep))),
@@ -473,8 +473,9 @@ class _SeatEditorDialogState extends State<_SeatEditorDialog> {
             SizedBox(height: 10.px),
             DropdownButtonFormField<UserRole>(
               initialValue: _role,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Role'),
-              items: UserRole.values.map((r) => DropdownMenuItem(value: r, child: Text(r.name))).toList(),
+              items: UserRole.values.map((r) => DropdownMenuItem(value: r, child: Text(r.label))).toList(),
               onChanged: (v) => setState(() => _role = v ?? _role),
             ),
             SizedBox(height: 10.px),

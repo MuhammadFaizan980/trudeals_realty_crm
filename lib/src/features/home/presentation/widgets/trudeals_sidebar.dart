@@ -270,7 +270,7 @@ class _UserSwitcherState extends State<_UserSwitcher> {
                 onSelected: (userId) async {
                   final seat = seats.where((u) => u.id == userId).firstOrNull;
                   if (seat?.email == null || seat!.email!.isEmpty) return;
-                  final pass = await _showPasswordDialog(context);
+                  final pass = await _showPasswordDialog(context, seat.name);
                   if (pass == null || !context.mounted) return;
 
                   final authCubit = context.read<AuthCubit>();
@@ -311,7 +311,7 @@ class _UserSwitcherState extends State<_UserSwitcher> {
                   borderRadius: BorderRadius.circular(99.px),
                 ),
                 child: Text(
-                  '${state.user.role.name.toUpperCase()} · ${state.user.dept.toUpperCase()}',
+                  '${state.user.role.label.toUpperCase()} · ${state.user.dept.toUpperCase()}',
                   style: TextStyle(
                     fontSize: 10.5.px,
                     fontWeight: FontWeight.w700,
@@ -326,13 +326,13 @@ class _UserSwitcherState extends State<_UserSwitcher> {
     );
   }
 
-  Future<String?> _showPasswordDialog(BuildContext context) {
+  Future<String?> _showPasswordDialog(BuildContext context, String seatName) {
     final controller = TextEditingController();
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Enter password'),
-        content: TextField(controller: controller, obscureText: true),
+        title: Text("Enter $seatName's password"),
+        content: TextField(controller: controller, obscureText: true, autofocus: true),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           TextButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Login')),

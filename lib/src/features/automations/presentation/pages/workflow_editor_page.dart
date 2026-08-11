@@ -89,12 +89,13 @@ class _WorkflowEditorPageState extends State<WorkflowEditorPage> {
                     Expanded(
                       child: DropdownButtonFormField<TriggerType>(
                         initialValue: _triggerType,
+                        isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Trigger'),
                         items: const [
-                          DropdownMenuItem(value: TriggerType.tag, child: Text('Tag is added')),
-                          DropdownMenuItem(value: TriggerType.form, child: Text('Form is submitted')),
-                          DropdownMenuItem(value: TriggerType.stage, child: Text('Moved to stage')),
-                          DropdownMenuItem(value: TriggerType.click, child: Text('Link is clicked')),
+                          DropdownMenuItem(value: TriggerType.tag, child: Text('Tag is added', overflow: TextOverflow.ellipsis)),
+                          DropdownMenuItem(value: TriggerType.form, child: Text('Form is submitted', overflow: TextOverflow.ellipsis)),
+                          DropdownMenuItem(value: TriggerType.stage, child: Text('Moved to stage', overflow: TextOverflow.ellipsis)),
+                          DropdownMenuItem(value: TriggerType.click, child: Text('Link is clicked', overflow: TextOverflow.ellipsis)),
                         ],
                         onChanged: (v) => setState(() {
                           _triggerType = v ?? TriggerType.tag;
@@ -144,8 +145,11 @@ class _WorkflowEditorPageState extends State<WorkflowEditorPage> {
       case TriggerType.form:
         return DropdownButtonFormField<String>(
           initialValue: LeadType.values.any((l) => l.name == _triggerValue) ? _triggerValue : null,
+          isExpanded: true,
           decoration: const InputDecoration(labelText: 'Lead type'),
-          items: LeadType.values.map((l) => DropdownMenuItem(value: l.name, child: Text(l.name.toUpperCase()))).toList(),
+          items: LeadType.values
+              .map((l) => DropdownMenuItem(value: l.name, child: Text(l.name.toUpperCase(), overflow: TextOverflow.ellipsis)))
+              .toList(),
           onChanged: (v) => setState(() => _triggerValue = v ?? ''),
         );
       case TriggerType.stage:
@@ -157,8 +161,9 @@ class _WorkflowEditorPageState extends State<WorkflowEditorPage> {
             final stages = (snapshot.data ?? pipelineCubit.state).stages;
             return DropdownButtonFormField<String>(
               initialValue: stages.any((s) => s.key == _triggerValue) ? _triggerValue : null,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Stage'),
-              items: stages.map((s) => DropdownMenuItem(value: s.key, child: Text(s.label))).toList(),
+              items: stages.map((s) => DropdownMenuItem(value: s.key, child: Text(s.label, overflow: TextOverflow.ellipsis))).toList(),
               onChanged: (v) => setState(() => _triggerValue = v ?? ''),
             );
           },
@@ -270,15 +275,16 @@ class _AddStepControlState extends State<_AddStepControl> {
         Expanded(
           child: DropdownButtonFormField<StepType>(
             initialValue: _type,
+            isExpanded: true,
             items: const [
-              DropdownMenuItem(value: StepType.email, child: Text('Send email')),
-              DropdownMenuItem(value: StepType.sms, child: Text('Send SMS')),
-              DropdownMenuItem(value: StepType.wait, child: Text('Wait')),
-              DropdownMenuItem(value: StepType.addTag, child: Text('Add tag')),
-              DropdownMenuItem(value: StepType.removeTag, child: Text('Remove tag')),
-              DropdownMenuItem(value: StepType.notify, child: Text('Notify team')),
-              DropdownMenuItem(value: StepType.ifCond, child: Text('Condition (IF...)')),
-              DropdownMenuItem(value: StepType.stopAll, child: Text('Stop other sequences')),
+              DropdownMenuItem(value: StepType.email, child: Text('Send email', overflow: TextOverflow.ellipsis)),
+              DropdownMenuItem(value: StepType.sms, child: Text('Send SMS', overflow: TextOverflow.ellipsis)),
+              DropdownMenuItem(value: StepType.wait, child: Text('Wait', overflow: TextOverflow.ellipsis)),
+              DropdownMenuItem(value: StepType.addTag, child: Text('Add tag', overflow: TextOverflow.ellipsis)),
+              DropdownMenuItem(value: StepType.removeTag, child: Text('Remove tag', overflow: TextOverflow.ellipsis)),
+              DropdownMenuItem(value: StepType.notify, child: Text('Notify team', overflow: TextOverflow.ellipsis)),
+              DropdownMenuItem(value: StepType.ifCond, child: Text('Condition (IF...)', overflow: TextOverflow.ellipsis)),
+              DropdownMenuItem(value: StepType.stopAll, child: Text('Stop other sequences', overflow: TextOverflow.ellipsis)),
             ],
             onChanged: (v) => setState(() => _type = v ?? StepType.email),
           ),
@@ -390,11 +396,12 @@ class _StepCardState extends State<_StepCard> {
             Expanded(
               child: DropdownButtonFormField<String>(
                 initialValue: step.waitUnit ?? 'min',
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Unit', isDense: true),
                 items: const [
-                  DropdownMenuItem(value: 'min', child: Text('Minutes')),
-                  DropdownMenuItem(value: 'hour', child: Text('Hours')),
-                  DropdownMenuItem(value: 'day', child: Text('Days')),
+                  DropdownMenuItem(value: 'min', child: Text('Minutes', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(value: 'hour', child: Text('Hours', overflow: TextOverflow.ellipsis)),
+                  DropdownMenuItem(value: 'day', child: Text('Days', overflow: TextOverflow.ellipsis)),
                 ],
                 onChanged: (v) => widget.onChanged(_copy(step, waitUnit: v)),
               ),
@@ -414,12 +421,13 @@ class _StepCardState extends State<_StepCard> {
           children: [
             DropdownButtonFormField<String>(
               initialValue: step.value ?? 'owner',
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Notify', isDense: true),
               items: const [
-                DropdownMenuItem(value: 'owner', child: Text('Profile owner')),
-                DropdownMenuItem(value: 'sales', child: Text('All Sales Reps')),
-                DropdownMenuItem(value: 'support', child: Text('All Support')),
-                DropdownMenuItem(value: 'super', child: Text('Super Admins')),
+                DropdownMenuItem(value: 'owner', child: Text('Profile owner', overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 'sales', child: Text('All Sales Reps', overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 'support', child: Text('All Support', overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 'super', child: Text('Super Admins', overflow: TextOverflow.ellipsis)),
               ],
               onChanged: (v) => widget.onChanged(_copy(step, value: v)),
             ),
@@ -437,11 +445,12 @@ class _StepCardState extends State<_StepCard> {
           children: [
             DropdownButtonFormField<String>(
               initialValue: step.cond ?? 'no_reply',
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Condition', isDense: true),
               items: const [
-                DropdownMenuItem(value: 'no_reply', child: Text('No response yet')),
-                DropdownMenuItem(value: 'has_tag', child: Text('Has tag…')),
-                DropdownMenuItem(value: 'clicked', child: Text('Link clicked')),
+                DropdownMenuItem(value: 'no_reply', child: Text('No response yet', overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 'has_tag', child: Text('Has tag…', overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 'clicked', child: Text('Link clicked', overflow: TextOverflow.ellipsis)),
               ],
               onChanged: (v) => widget.onChanged(_copy(step, cond: v)),
             ),
@@ -454,10 +463,11 @@ class _StepCardState extends State<_StepCard> {
             SizedBox(height: 8.px),
             DropdownButtonFormField<String>(
               initialValue: step.ifFalse ?? 'stop',
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Else', isDense: true),
               items: const [
-                DropdownMenuItem(value: 'stop', child: Text('Stop')),
-                DropdownMenuItem(value: 'skip', child: Text('Skip next step')),
+                DropdownMenuItem(value: 'stop', child: Text('Stop', overflow: TextOverflow.ellipsis)),
+                DropdownMenuItem(value: 'skip', child: Text('Skip next step', overflow: TextOverflow.ellipsis)),
               ],
               onChanged: (v) => widget.onChanged(_copy(step, ifFalse: v)),
             ),
@@ -474,8 +484,11 @@ class _StepCardState extends State<_StepCard> {
     }
     return DropdownButtonFormField<String>(
       initialValue: templates.any((t) => t['_id'] == selected) ? selected : null,
+      isExpanded: true,
       decoration: const InputDecoration(labelText: 'Template', isDense: true),
-      items: templates.map((t) => DropdownMenuItem(value: t['_id']?.toString(), child: Text(t['name']?.toString() ?? '—'))).toList(),
+      items: templates
+          .map((t) => DropdownMenuItem(value: t['_id']?.toString(), child: Text(t['name']?.toString() ?? '—', overflow: TextOverflow.ellipsis)))
+          .toList(),
       onChanged: onChanged,
     );
   }

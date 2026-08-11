@@ -38,7 +38,8 @@ class _AddContactPageState extends State<AddContactPage> {
   late final _addressController = TextEditingController(text: widget.existing?.propertyAddress ?? '');
   late final _valueController = TextEditingController(text: widget.existing?.dealValue.toStringAsFixed(0) ?? '');
 
-  late String _source = widget.existing?.source ?? _sourceOptions.first;
+  late String _source = (widget.existing?.source?.isNotEmpty == true) ? widget.existing!.source! : _sourceOptions.first;
+  late final List<String> _sourceItems = _sourceOptions.contains(_source) ? _sourceOptions : [..._sourceOptions, _source];
   late String _plan = _planOptions.containsKey(widget.existing?.plan) ? widget.existing!.plan : 'undecided';
   late Priority _priority = widget.existing?.priority ?? Priority.med;
   String? _stageKey;
@@ -126,7 +127,7 @@ class _AddContactPageState extends State<AddContactPage> {
               DropdownButtonFormField<String>(
                 initialValue: _source,
                 decoration: const InputDecoration(labelText: 'Lead source'),
-                items: _sourceOptions.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                items: _sourceItems.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                 onChanged: (v) => setState(() => _source = v ?? _source),
               ),
               SizedBox(height: 14.px),
@@ -160,15 +161,21 @@ class _AddContactPageState extends State<AddContactPage> {
                 SizedBox(height: 14.px),
                 DropdownButtonFormField<String>(
                   initialValue: effectiveStageKey,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Pipeline stage'),
-                  items: pipeline.stages.map((s) => DropdownMenuItem(value: s.key, child: Text(s.label))).toList(),
+                  items: pipeline.stages
+                      .map((s) => DropdownMenuItem(value: s.key, child: Text(s.label, overflow: TextOverflow.ellipsis)))
+                      .toList(),
                   onChanged: (v) => setState(() => _stageKey = v),
                 ),
                 SizedBox(height: 14.px),
                 DropdownButtonFormField<String>(
                   initialValue: effectiveAssignedTo,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Assigned to'),
-                  items: pipeline.users.map((u) => DropdownMenuItem(value: u.id, child: Text('${u.name} — ${u.dept}'))).toList(),
+                  items: pipeline.users
+                      .map((u) => DropdownMenuItem(value: u.id, child: Text('${u.name} — ${u.dept}', overflow: TextOverflow.ellipsis)))
+                      .toList(),
                   onChanged: (v) => setState(() => _assignedTo = v),
                 ),
               ] else

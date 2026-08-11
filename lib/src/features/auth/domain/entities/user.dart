@@ -9,6 +9,14 @@ enum UserRole {
   static UserRole fromKey(String key) {
     return UserRole.values.firstWhere((e) => e.key == key, orElse: () => UserRole.sales);
   }
+
+  /// Human-friendly label for UI display — `.name` would leak the raw enum
+  /// identifier (e.g. "superAdmin") straight into the interface.
+  String get label => switch (this) {
+        UserRole.superAdmin => 'Super Admin',
+        UserRole.sales => 'Sales',
+        UserRole.support => 'Support',
+      };
 }
 
 class User {

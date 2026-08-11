@@ -376,6 +376,21 @@ class _OverviewTabState extends State<_OverviewTab> {
           ],
         ),
         SizedBox(height: 24.px),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const _SectionHeader(title: 'Notes'),
+            TextButton(
+              onPressed: () => _openEditNotes(context, contact),
+              child: Text(contact.notes?.trim().isNotEmpty == true ? 'Edit' : '+ Add note'),
+            ),
+          ],
+        ),
+        Text(
+          contact.notes?.trim().isNotEmpty == true ? contact.notes!.trim() : 'No notes yet.',
+          style: TextStyle(fontSize: 13.5.px, color: contact.notes?.trim().isNotEmpty == true ? TruDealsColors.ink : TruDealsColors.inkSoft),
+        ),
+        SizedBox(height: 24.px),
         const _SectionHeader(title: 'Tags'),
         Wrap(
           spacing: 6.px,
@@ -460,6 +475,14 @@ class _OverviewTabState extends State<_OverviewTab> {
     if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
     }
+  }
+
+  void _openEditNotes(BuildContext context, Contact contact) {
+    final cubit = context.read<ContactDetailCubit>();
+    showDialog(
+      context: context,
+      builder: (dialogContext) => BlocProvider.value(value: cubit, child: _NotesDialog(existing: contact.notes)),
+    );
   }
 }
 
@@ -998,8 +1021,11 @@ class _TransferDialogState extends State<_TransferDialog> {
               else
                 DropdownButtonFormField<String>(
                   initialValue: _toUserId,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Send to'),
-                  items: users.map((u) => DropdownMenuItem(value: u.id, child: Text('${u.name} — ${u.dept}'))).toList(),
+                  items: users
+                      .map((u) => DropdownMenuItem(value: u.id, child: Text('${u.name} — ${u.dept}', overflow: TextOverflow.ellipsis)))
+                      .toList(),
                   onChanged: (v) => setState(() => _toUserId = v),
                 ),
               SizedBox(height: 12.px),
@@ -1235,6 +1261,61 @@ class _OrderDialogState extends State<_OrderDialog> {
   Future<void> _clear(BuildContext context) async {
     setState(() => _saving = true);
     final error = await context.read<ContactDetailCubit>().cancelOrder(widget.kind);
+    if (!context.mounted) return;
+    if (error != null) {
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    } else {
+      Navigator.pop(context);
+    }
+  }
+}
+
+class _NotesDialog extends StatefulWidget {
+  final String? existing;
+  const _NotesDialog({this.existing});
+
+  @override
+  State<_NotesDialog> createState() => _NotesDialogState();
+}
+
+class _NotesDialogState extends State<_NotesDialog> {
+  late final _notesController = TextEditingController(text: widget.existing ?? '');
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Notes'),
+      content: SizedBox(
+        width: 380.px,
+        child: TextField(
+          controller: _notesController,
+          autofocus: true,
+          minLines: 5,
+          maxLines: 10,
+          decoration: const InputDecoration(hintText: 'Notes about this contact…', alignLabelWithHint: true),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        ElevatedButton(
+          onPressed: _saving ? null : () => _save(context),
+          child: _saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _save(BuildContext context) async {
+    setState(() => _saving = true);
+    final error = await context.read<ContactDetailCubit>().updateFields({'notes': _notesController.text.trim()});
     if (!context.mounted) return;
     if (error != null) {
       setState(() => _saving = false);

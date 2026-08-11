@@ -46,6 +46,7 @@ class PipelinePage extends StatelessWidget {
               stage: stage,
               contacts: contactsInStage,
               locked: locked,
+              userName: state.userName,
               onDrop: (contactId) async {
                 final messenger = ScaffoldMessenger.of(context);
                 if (locked) {
@@ -92,8 +93,15 @@ class _PipelineColumn extends StatelessWidget {
   final List<Contact> contacts;
   final bool locked;
   final Function(String) onDrop;
+  final String Function(String?) userName;
 
-  const _PipelineColumn({required this.stage, required this.contacts, required this.locked, required this.onDrop});
+  const _PipelineColumn({
+    required this.stage,
+    required this.contacts,
+    required this.locked,
+    required this.onDrop,
+    required this.userName,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -142,7 +150,7 @@ class _PipelineColumn extends StatelessWidget {
                     : ListView.builder(
                         padding: EdgeInsets.symmetric(horizontal: 10.px),
                         itemCount: contacts.length,
-                        itemBuilder: (context, index) => _PipelineCard(contact: contacts[index]),
+                        itemBuilder: (context, index) => _PipelineCard(contact: contacts[index], userName: userName),
                       ),
               ),
             ],
@@ -155,7 +163,8 @@ class _PipelineColumn extends StatelessWidget {
 
 class _PipelineCard extends StatelessWidget {
   final Contact contact;
-  const _PipelineCard({required this.contact});
+  final String Function(String?) userName;
+  const _PipelineCard({required this.contact, required this.userName});
 
   @override
   Widget build(BuildContext context) {
@@ -163,18 +172,19 @@ class _PipelineCard extends StatelessWidget {
       data: contact.id,
       feedback: Material(
         color: Colors.transparent,
-        child: _CardContent(contact: contact, isFeedback: true),
+        child: _CardContent(contact: contact, userName: userName, isFeedback: true),
       ),
-      childWhenDragging: Opacity(opacity: 0.4, child: _CardContent(contact: contact)),
-      child: _CardContent(contact: contact),
+      childWhenDragging: Opacity(opacity: 0.4, child: _CardContent(contact: contact, userName: userName)),
+      child: _CardContent(contact: contact, userName: userName),
     );
   }
 }
 
 class _CardContent extends StatelessWidget {
   final Contact contact;
+  final String Function(String?) userName;
   final bool isFeedback;
-  const _CardContent({required this.contact, this.isFeedback = false});
+  const _CardContent({required this.contact, required this.userName, this.isFeedback = false});
 
   @override
   Widget build(BuildContext context) {
@@ -223,7 +233,7 @@ class _CardContent extends StatelessWidget {
                   SizedBox(width: 4.px),
                   Expanded(
                     child: Text(
-                      contact.assignedTo!,
+                      userName(contact.assignedTo),
                       style: TextStyle(fontSize: 11.px, color: TruDealsColors.inkSoft),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

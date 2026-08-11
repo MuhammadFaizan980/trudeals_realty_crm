@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sizer/sizer.dart';
@@ -11,9 +12,39 @@ import 'package:trudeals_realty_crm/src/features/contacts/presentation/widgets/c
 import 'package:trudeals_realty_crm/src/features/contacts/presentation/cubits/pipeline_cubit.dart';
 import 'package:trudeals_realty_crm/src/features/contacts/domain/entities/contact.dart';
 import 'package:trudeals_realty_crm/src/features/contacts/domain/entities/activity.dart';
+import 'package:trudeals_realty_crm/src/features/contacts/domain/entities/stage.dart';
 
-const _leadStages = ['new', 'contacted', 'appt'];
-const _listingStages = ['signed', 'active', 'contract'];
+/// Classifies every *current* stage into "lead" or "listing" for the
+/// dashboard's stat cards, anchored on the well-known `signed`/`closed`
+/// stage keys the rest of the app already relies on (see `stage != 'closed'`
+/// elsewhere) rather than an exhaustive hardcoded list of stage keys. A
+/// hardcoded list silently drops any stage the team adds later — confirmed
+/// against live data: a custom "New Lead Buying" stage and the stock
+/// "Order Photos"/"Order Sign" stages were invisible to the old stat cards.
+class _StageBuckets {
+  final Set<String> leadKeys;
+  final Set<String> listingKeys;
+  const _StageBuckets({required this.leadKeys, required this.listingKeys});
+
+  factory _StageBuckets.from(List<Stage> stages) {
+    final signedOrder = stages.firstWhereOrNull((s) => s.key == 'signed')?.sortOrder;
+    final closedOrder = stages.firstWhereOrNull((s) => s.key == 'closed')?.sortOrder;
+
+    final leads = <String>{};
+    final listings = <String>{};
+    if (signedOrder != null) {
+      for (final s in stages) {
+        if (s.key == 'support' || s.key == 'closed') continue;
+        if (s.sortOrder < signedOrder) {
+          leads.add(s.key);
+        } else if (closedOrder != null && s.sortOrder < closedOrder) {
+          listings.add(s.key);
+        }
+      }
+    }
+    return _StageBuckets(leadKeys: leads, listingKeys: listings);
+  }
+}
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
@@ -60,6 +91,7 @@ class _DashboardViewState extends State<_DashboardView> {
           );
         }
 
+        final buckets = _StageBuckets.from(pipeline.stages);
         final followUps = contacts.where((c) => c.followUp != null && c.stage != 'closed').toList()
           ..sort((a, b) => a.followUp!.compareTo(b.followUp!));
         final recent = contacts
@@ -77,6 +109,7 @@ class _DashboardViewState extends State<_DashboardView> {
             children: [
               _StatsRow(
                 contacts: contacts,
+                buckets: buckets,
                 expandedSegment: _expandedSegment,
                 onSegmentTap: (seg) => setState(() => _expandedSegment = _expandedSegment == seg ? null : seg),
               ),
@@ -85,6 +118,7 @@ class _DashboardViewState extends State<_DashboardView> {
                 _ExpandedSegmentPanel(
                   segment: _expandedSegment!,
                   contacts: contacts,
+                  buckets: buckets,
                   userName: pipeline.userName,
                   onCollapse: () => setState(() => _expandedSegment = null),
                 ),
@@ -120,15 +154,16 @@ class _DashboardViewState extends State<_DashboardView> {
 
 class _StatsRow extends StatelessWidget {
   final List<Contact> contacts;
+  final _StageBuckets buckets;
   final String? expandedSegment;
   final Function(String) onSegmentTap;
 
-  const _StatsRow({required this.contacts, this.expandedSegment, required this.onSegmentTap});
+  const _StatsRow({required this.contacts, required this.buckets, this.expandedSegment, required this.onSegmentTap});
 
   @override
   Widget build(BuildContext context) {
-    final activeLeads = contacts.where((c) => _leadStages.contains(c.stage)).length;
-    final listingsInPlay = contacts.where((c) => _listingStages.contains(c.stage)).length;
+    final activeLeads = contacts.where((c) => buckets.leadKeys.contains(c.stage)).length;
+    final listingsInPlay = contacts.where((c) => buckets.listingKeys.contains(c.stage)).length;
     final inSupport = contacts.where((c) => c.stage == 'support').length;
     final openPipeline = contacts.where((c) => c.stage != 'closed');
     final pipelineValue = openPipeline.fold(0.0, (sum, c) => sum + c.dealValue);
@@ -146,7 +181,7 @@ class _StatsRow extends StatelessWidget {
           _StatCard(
             label: 'Active leads',
             value: activeLeads.toString(),
-            hint: 'New through appointment',
+            hint: 'Before agreement signed',
             isExpanded: expandedSegment == 'leads',
             onTap: () => onSegmentTap('leads'),
           ),
@@ -387,9 +422,16 @@ class _ActivityTile extends StatelessWidget {
 class _ExpandedSegmentPanel extends StatelessWidget {
   final String segment;
   final List<Contact> contacts;
+  final _StageBuckets buckets;
   final String Function(String?) userName;
   final VoidCallback onCollapse;
-  const _ExpandedSegmentPanel({required this.segment, required this.contacts, required this.userName, required this.onCollapse});
+  const _ExpandedSegmentPanel({
+    required this.segment,
+    required this.contacts,
+    required this.buckets,
+    required this.userName,
+    required this.onCollapse,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -401,8 +443,8 @@ class _ExpandedSegmentPanel extends StatelessWidget {
       _ => '',
     };
     final filtered = switch (segment) {
-      'leads' => contacts.where((c) => _leadStages.contains(c.stage)).toList(),
-      'listings' => contacts.where((c) => _listingStages.contains(c.stage)).toList(),
+      'leads' => contacts.where((c) => buckets.leadKeys.contains(c.stage)).toList(),
+      'listings' => contacts.where((c) => buckets.listingKeys.contains(c.stage)).toList(),
       'support' => contacts.where((c) => c.stage == 'support').toList(),
       'pipeline' => contacts.where((c) => c.stage != 'closed').toList(),
       _ => <Contact>[],

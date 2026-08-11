@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:trudeals_realty_crm/src/core/theme/trudeals_colors.dart';
 import 'package:trudeals_realty_crm/src/core/di/injection.dart';
 import 'package:trudeals_realty_crm/src/features/contacts/domain/entities/contact.dart';
+import 'package:trudeals_realty_crm/src/features/contacts/domain/repositories/contacts_repository.dart';
 import 'package:trudeals_realty_crm/src/features/contacts/domain/usecases/create_contact_usecase.dart';
 
 class IntakeFormsPage extends StatefulWidget {
@@ -44,13 +45,31 @@ class _IntakeFormsPageState extends State<IntakeFormsPage> {
     );
 
     final result = await getIt<CreateContactUseCase>().call(contact);
-    result.fold(
-      ifLeft: (e) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message))),
-      ifRight: (c) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lead created successfully!')));
-        _clear();
-      },
-    );
+    Contact? created;
+    String? createError;
+    result.fold(ifLeft: (e) => createError = e.message, ifRight: (c) => created = c);
+
+    if (!mounted) return;
+    if (createError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(createError!)));
+      return;
+    }
+
+    // The create endpoint doesn't accept a notes field, so the call notes
+    // have to be persisted with a follow-up patch against the new contact.
+    var message = 'Lead created successfully!';
+    final notes = _notesController.text.trim();
+    if (notes.isNotEmpty) {
+      final noteResult = await getIt<ContactsRepository>().updateContact(created!.id, {'notes': notes});
+      noteResult.fold(
+        ifLeft: (e) => message = "Lead created, but the note couldn't be saved: ${e.message}",
+        ifRight: (_) {},
+      );
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    _clear();
   }
 
   void _clear() {

@@ -26,6 +26,7 @@ class Contact {
   final DateTime? linkClickedAt;
   final DateTime? lastInboundAt;
   final DateTime createdAt;
+  final String? notes;
   final List<String> tags;
   final bool deleted;
   final DateTime? deletedAt;
@@ -56,6 +57,7 @@ class Contact {
     this.linkClickedAt,
     this.lastInboundAt,
     required this.createdAt,
+    this.notes,
     this.tags = const [],
     this.deleted = false,
     this.deletedAt,
@@ -86,6 +88,7 @@ class Contact {
           assignedTo == other.assignedTo &&
           followUp == other.followUp &&
           createdAt == other.createdAt &&
+          notes == other.notes &&
           listEquals(tags, other.tags) &&
           deleted == other.deleted &&
           deletedAt == other.deletedAt &&
@@ -110,6 +113,7 @@ class Contact {
       assignedTo.hashCode ^
       followUp.hashCode ^
       createdAt.hashCode ^
+      notes.hashCode ^
       tags.hashCode ^
       deleted.hashCode ^
       deletedAt.hashCode;
@@ -140,6 +144,7 @@ class Contact {
       linkClickedAt: json['linkClickedAt'] != null ? DateTime.tryParse(json['linkClickedAt'].toString()) : null,
       lastInboundAt: json['lastInboundAt'] != null ? DateTime.tryParse(json['lastInboundAt'].toString()) : null,
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
+      notes: json['notes']?.toString(),
       tags: List<String>.from(json['tags'] ?? const []),
       deleted: json['deleted'] as bool? ?? false,
       deletedAt: json['deletedAt'] != null ? DateTime.tryParse(json['deletedAt'].toString()) : null,
@@ -180,6 +185,7 @@ class Contact {
       'assignedTo': assignedTo,
       'followUp': followUp?.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
+      'notes': notes,
       'tags': tags,
       'deleted': deleted,
       'deletedAt': deletedAt?.toIso8601String(),
